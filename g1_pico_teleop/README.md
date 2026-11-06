@@ -9,9 +9,39 @@ The robot runs the bringup with `use_gear_sonic:=true`, so `gear_sonic_interface
 
 ## Prerequisites
 
-`pico_manager_ros.py` needs one Python that can import both rclpy (ROS 2 Jazzy, Python 3.12) and the gear_sonic teleop dependencies (`xrobotoolkit_sdk`, torch, ...). The `.venv_teleop` created by `install_pico.sh` uses a different Python version, so prepare a Python 3.12 environment with the teleop dependencies on the robot first. The robot host runs ROS inside the `ghcr.io/mqcmd196/g1_ros` container, so one option is to add the teleop dependencies to that image.
+`pico_manager_ros.py` needs one Python that can import both rclpy (ROS 2 Jazzy, Python 3.12) and the gear_sonic teleop dependencies (`xrobotoolkit_sdk`, torch, ...). The robot host has neither ROS 2 Jazzy nor Python 3.12 (`.venv_teleop` from `install_pico.sh` uses a different version). So run it with `rocker` in the same `ghcr.io/mqcmd196/g1_ros` image as the bringup service, and keep a Python 3.12 teleop venv inside the mounted `~/GR00T-WholeBodyControl`.
 
-`--optical-hand-port` requires `~/GR00T-WholeBodyControl/gear_sonic/scripts/pico_manager_thread_server.py` on the robot to have the [optical-hands patch](patches/pico_manager_optical_hands.patch) applied.
+> [!NOTE]
+> The rocker commands below have not been tested yet.
+
+The commands assume these paths on the robot:
+
+- `/home/unitree/GR00T-WholeBodyControl`: GR00T-WholeBodyControl with the [optical-hands patch](patches/pico_manager_optical_hands.patch) applied (needed for `--optical-hand-port`)
+- `/home/unitree/ros/colcon_ws/src/g1_ros`: this repository. The image is built from `master`, which does not contain `g1_pico_teleop` yet, so the script is run from this mounted checkout.
+
+Create the venv once. Open a shell in the image with GR00T-WholeBodyControl mounted:
+
+```bash
+rocker --network host \
+    --volume /home/unitree/GR00T-WholeBodyControl:/root/GR00T-WholeBodyControl \
+    -- ghcr.io/mqcmd196/g1_ros:latest bash
+```
+
+Inside the container, follow the steps of `install_scripts/install_pico.sh` with the image's Python 3.12. `--system-site-packages` keeps the apt Python packages that rclpy uses:
+
+```bash
+apt-get update && apt-get install -y python3-venv python3-dev
+cd /root/GR00T-WholeBodyControl
+python3 -m venv --system-site-packages .venv_teleop_ros
+source .venv_teleop_ros/bin/activate
+pip install -e "gear_sonic[teleop]"
+pip install cmake pybind11 setuptools
+export CMAKE_PREFIX_PATH="$(python -m pybind11 --cmakedir)"
+pip install --no-build-isolation -e external_dependencies/XRoboToolkit-PC-Service-Pybind_X86_and_ARM64/
+exit
+```
+
+This reuses `external_dependencies/XRoboToolkit-PC-Service-Pybind_X86_and_ARM64/lib/aarch64/libPXREARobotSDK.so`, which `install_pico.sh` already built on the robot. The venv lives in the mounted directory, so it survives after the container exits. Always mount it at the same path, `/root/GR00T-WholeBodyControl`.
 
 ## Start the robot programs | Terminal A
 
@@ -29,19 +59,28 @@ After logging in, start SONIC, ROS (with `use_gear_sonic:=true`) and the Inspire
 sudo systemctl start ros2-g1-gear-sonic-bringup.service
 ```
 
-Then start the PICO manager in the same terminal, in the Python 3.12 environment from [Prerequisites](#prerequisites):
+The manager normally starts XRoboToolkit PC Service itself, but PC Service is installed on the robot host, not in the image. Start it on the host first:
 
 ```bash
-source /opt/ros/jazzy/setup.bash && source <g1_ros workspace>/install/setup.bash
-source <python 3.12 teleop venv>/bin/activate
-export ROS_DOMAIN_ID=164
-export FASTDDS_BUILTIN_TRANSPORTS=LARGE_DATA
-ros2 run g1_pico_teleop pico_manager_ros.py --gr00t_root ~/GR00T-WholeBodyControl --optical-hand-port 5560
+nohup bash /opt/apps/roboticsservice/runService.sh > /tmp/roboticsservice.log 2>&1 &
 ```
+
+Then start the PICO manager in the same terminal, in the container with the venv from [Prerequisites](#prerequisites):
+
+```bash
+rocker --network host --ipc host --name pico-manager \
+    --env ROS_DOMAIN_ID=164 --env FASTDDS_BUILTIN_TRANSPORTS=LARGE_DATA \
+    --volume /home/unitree/GR00T-WholeBodyControl:/root/GR00T-WholeBodyControl \
+             /home/unitree/ros/colcon_ws/src/g1_ros:/root/g1_ros \
+    -- ghcr.io/mqcmd196/g1_ros:latest \
+    "bash -lc 'source /root/target_ws/install/setup.bash && source /root/GR00T-WholeBodyControl/.venv_teleop_ros/bin/activate && exec python /root/g1_ros/g1_pico_teleop/scripts/pico_manager_ros.py --gr00t_root /root/GR00T-WholeBodyControl --optical-hand-port 5560'"
+```
+
+`ROS_DOMAIN_ID=164` matches the bringup service. Inside the container, the manager's own attempt to start PC Service fails harmlessly because `/opt/apps/roboticsservice` is not in the image.
 
 Do not run `pico_manager_thread_server.py` directly: it would try to bind port 5556, which `gear_sonic_interface` already uses.
 
-Keep terminal A open. The manager also starts XRoboToolkit PC Service.
+Keep terminal A open.
 
 ## Connect and calibrate | PICO
 
