@@ -17,7 +17,10 @@ setup(
         ),
         (f"share/{package_name}", ["package.xml", "README.md"]),
         (f"share/{package_name}/launch", glob("launch/*.launch.py")),
-        (f"lib/{package_name}", glob("scripts/pico_xrt_source.py")),
+        (
+            f"lib/{package_name}",
+            ["scripts/pico_xrt_source.py", "scripts/pico_manager_ros.py"],
+        ),
         (f"share/{package_name}/config", glob("config/*")),
         (f"share/{package_name}/patches", glob("patches/*.patch")),
     ],

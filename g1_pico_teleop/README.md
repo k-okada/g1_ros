@@ -103,3 +103,20 @@ PICO → G1 XRoboToolkit → manager
 Body control goes directly through the original manager, without ROS `SmplMotion`. The local package is already built; use the commands above to start it.
 
 The only modified robot file is `~/GR00T-WholeBodyControl/gear_sonic/scripts/pico_manager_thread_server.py`. Omit `--optical-hand-port 5560` to use the original controller workflow. The original file is saved on the workstation desktop. See the [patch](patches/pico_manager_optical_hands.patch).
+
+## Alternative: body control through ROS (`pico_manager_ros.py`)
+
+`scripts/pico_manager_ros.py` imports the unmodified `pico_manager_thread_server.run_pico_manager()` and redirects only its manager PUB socket (`--port`, default 5556) to ROS. That port is never bound, so `gear_sonic_interface` (`use_gear_sonic:=true`) stays the only process talking to SONIC:
+
+- POSE-mode SMPL frames → `gear_sonic_interfaces/SmplMotion` on `/gear_sonic_interface/smpl_motion` (newest frame per message)
+- PICO button mode switches → `/gear_sonic_interface/enable_control` / `enable_smpl_stream`. A+B+X+Y returns to IDLE balance instead of damping.
+- PLANNER / VR-3PT planner messages are dropped. In those modes the robot is driven by `gear_sonic_interface`.
+- Other PUB sockets, such as `--optical-hand-port` with the optical-hands patch, and the 5557 feedback SUB stay real ZMQ.
+
+It needs one Python that imports rclpy (Jazzy: 3.12) and the gear_sonic teleop dependencies (`xrobotoolkit_sdk`, torch, ...):
+
+```bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
+export ROS_DOMAIN_ID=164
+ros2 run g1_pico_teleop pico_manager_ros.py --gr00t_root ~/GR00T-WholeBodyControl
+```

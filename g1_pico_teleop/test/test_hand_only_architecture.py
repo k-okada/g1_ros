@@ -63,7 +63,9 @@ def test_packaging_only_exports_hand_runtime(monkeypatch):
 def test_body_dependencies_are_not_runtime_dependencies():
     root = ET.parse(PACKAGE_ROOT / "package.xml").getroot()
     runtime = {element.text for element in root.findall("exec_depend")}
-    assert not {"gear_sonic_interfaces", "geometry_msgs"} & runtime
+    # gear_sonic_interfaces is used only by scripts/pico_manager_ros.py (body via ROS);
+    # the hand adapter itself must stay body-free (see the first test).
+    assert "geometry_msgs" not in runtime
     assert "python3-zmq" in runtime  # Robot optical-hand transport, not body control.
     assert {"rclpy", "sensor_msgs", "trajectory_msgs", "std_srvs"} <= runtime
     assert "python3-scipy" not in runtime
