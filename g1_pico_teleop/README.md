@@ -59,10 +59,10 @@ After logging in, start SONIC, ROS (with `use_gear_sonic:=true`) and the Inspire
 sudo systemctl start ros2-g1-gear-sonic-bringup.service
 ```
 
-The manager normally starts XRoboToolkit PC Service itself, but PC Service is installed on the robot host, not in the image. Start it on the host first:
+The manager normally starts XRoboToolkit PC Service itself by running `/opt/apps/roboticsservice/runService.sh`. That script is installed on the robot host by `gear_sonic_deploy/thirdparty/roboticsservice_1.0.0.0_arm64.deb` (see GR00T-WholeBodyControl `docs/source/getting_started/vr_teleop_setup.md`), but it is not in the image. So start PC Service on the host first. The script starts `RoboticsServiceProcess` in the background and returns:
 
 ```bash
-nohup bash /opt/apps/roboticsservice/runService.sh > /tmp/roboticsservice.log 2>&1 &
+bash /opt/apps/roboticsservice/runService.sh
 ```
 
 Then start the PICO manager in the same terminal, in the container with the venv from [Prerequisites](#prerequisites):
