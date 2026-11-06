@@ -17,15 +17,24 @@ Open terminal A on the workstation and log in to the robot:
 ssh unitree@unitree-g1-nx.local
 ```
 
-After logging in, run these commands in the same terminal:
+After logging in, start SONIC, ROS and the Inspire driver:
 
 ```bash
 sudo systemctl start ros2-g1-gear-sonic-bringup.service
-cd ~/GR00T-WholeBodyControl
-.venv_teleop/bin/python -B gear_sonic/scripts/pico_manager_thread_server.py --manager --optical-hand-port 5560
 ```
 
-Keep terminal A open. These commands start SONIC, ROS, the Inspire driver, and XRoboToolkit PC Service.
+Then start the PICO manager in the same terminal. Which command you run depends on how body commands are sent:
+
+- **Direct ZMQ:** run the patched original manager:
+
+  ```bash
+  cd ~/GR00T-WholeBodyControl
+  .venv_teleop/bin/python -B gear_sonic/scripts/pico_manager_thread_server.py --manager --optical-hand-port 5560
+  ```
+
+- **Through ROS:** do **not** run `pico_manager_thread_server.py`. Run `pico_manager_ros.py` instead, with the same `--optical-hand-port 5560`. See [Run](#run) for the command and the Python environment it needs.
+
+Keep terminal A open. The manager also starts XRoboToolkit PC Service.
 
 ## Connect and calibrate | PICO
 
@@ -147,7 +156,7 @@ The script needs one Python that can import both rclpy (Jazzy: Python 3.12) and 
 
 ### Run
 
-Start the bringup with `use_gear_sonic:=true` (the systemd service already does this) and do **not** start `pico_manager_thread_server.py` in terminal A. Then run:
+Start the bringup with `use_gear_sonic:=true` (the systemd service already does this). In terminal A, run this instead of `pico_manager_thread_server.py`:
 
 ```bash
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
